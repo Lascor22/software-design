@@ -1,0 +1,11 @@
+/build/
+/bin/
+/target
+.idea
+
+dependency*
+properties*
+
+*.png
+*.jar
+*.iml
