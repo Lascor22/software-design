@@ -3,41 +3,50 @@ package ru.akirakozov.sd.refactoring;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import ru.akirakozov.sd.refactoring.db.DBAccess;
+import ru.akirakozov.sd.refactoring.db.DBLib;
 import ru.akirakozov.sd.refactoring.servlet.AddProductServlet;
 import ru.akirakozov.sd.refactoring.servlet.GetProductsServlet;
 import ru.akirakozov.sd.refactoring.servlet.QueryServlet;
+import ru.akirakozov.sd.refactoring.servlet.ResourceServlet;
+import ru.akirakozov.sd.refactoring.utils.Pair;
+import ru.akirakozov.sd.refactoring.utils.PropertiesLoader;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
+import javax.servlet.Servlet;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * @author akirakozov
- */
+import static org.eclipse.jetty.servlet.ServletContextHandler.SESSIONS;
+
 public class Main {
-    public static void main(String[] args) throws Exception {
-        try (Connection c = DriverManager.getConnection("jdbc:sqlite:test.db")) {
-            String sql = "CREATE TABLE IF NOT EXISTS PRODUCT" +
-                    "(ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL," +
-                    " NAME           TEXT    NOT NULL, " +
-                    " PRICE          INT     NOT NULL)";
-            Statement stmt = c.createStatement();
 
-            stmt.executeUpdate(sql);
-            stmt.close();
-        }
+    static {
+        PropertiesLoader.load("src/main/resources/properties");
+    }
+
+    private static List<Pair<String, Servlet>> SERVLETS = new ArrayList<>();
+
+    static {
+        SERVLETS.add(new Pair<>("/add-product", new AddProductServlet()));
+        SERVLETS.add(new Pair<>("/get-products", new GetProductsServlet()));
+        SERVLETS.add(new Pair<>("/query", new QueryServlet()));
+        SERVLETS.add(new Pair<>("/src/*", new ResourceServlet()));
+    }
+
+    public static void main(String... args) throws Exception {
+        DBAccess db = DBAccess.getInstanceOf();
+        db.update(DBLib.createTable());
 
         Server server = new Server(8081);
 
-        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        ServletContextHandler context = new ServletContextHandler(SESSIONS);
+        SERVLETS.forEach(p -> context.addServlet(new ServletHolder(p.second), p.first));
         context.setContextPath("/");
         server.setHandler(context);
 
-        context.addServlet(new ServletHolder(new AddProductServlet()), "/add-product");
-        context.addServlet(new ServletHolder(new GetProductsServlet()),"/get-products");
-        context.addServlet(new ServletHolder(new QueryServlet()),"/query");
-
         server.start();
         server.join();
+
+        db.close();
     }
 }
